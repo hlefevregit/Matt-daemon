@@ -6,7 +6,7 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/08 11:29:41 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/11/18 18:09:58 by hugo             ###   ########.fr       */
+/*   Updated: 2025/11/19 15:23:57 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -230,14 +230,13 @@ void Client::update() {
 		}
 
 		Message message;
-		message.setType(msg_type);
-		message.clear();
+		message.clear(); // initialise header et readPos
 		message.ensureCapacity(msg_size);
 		message.appendData(_recv_buffer.data() + Message::HEADER_SIZE, msg_size);
+		message.setType(msg_type); // écrit type + taille correcte dans l'en-tête
+		handleMessage(message);
 
 		_recv_buffer.erase(_recv_buffer.begin(), _recv_buffer.begin() + Message::HEADER_SIZE + msg_size);
-
-		handleMessage(message);
 	}
 }
 

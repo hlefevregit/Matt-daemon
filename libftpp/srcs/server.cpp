@@ -6,13 +6,13 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/14 11:46:55 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/11/18 17:58:56 by hugo             ###   ########.fr       */
+/*   Updated: 2025/11/19 15:40:08 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/server.hpp"
 #include "../includes/crypto.hpp"
-
+#include "../includes/colors.hpp"
 // small helpers for logging
 static std::string hex_encode(const unsigned char* data, size_t len) {
 	std::string s;
@@ -81,6 +81,39 @@ void Server::start(const size_t& p_port) {
 	}
 
 	_isRunning.store(true);
+
+	// Register a default TEXT handler: extract (from, text) and broadcast to other clients
+	defineAction(Message::Type::TEXT, [this](long long& clientID, const Message& msg) {
+		try {
+			// copy message so we don't mutate the stored read position of the original
+			Message m = msg;
+			std::string from;
+			std::string text;
+			m >> from >> text; // operator>> is const and uses mutable readPos
+
+			Message out(Message::Type::TEXT);
+			out << from << text;
+
+			// Collect recipients (all clients except the sender)
+			std::vector<long long> recipients;
+			{
+				std::lock_guard<std::mutex> lock(_clientsMutex);
+				for (const auto& pair : _clients) {
+					if (pair.first != clientID) recipients.push_back(pair.first);
+				}
+			}
+
+			if (!recipients.empty()) {
+				sendToArray(out, recipients);
+			}
+			std::cout << GREEN << "[Server] " << RESET << from << ": " << text << std::endl;
+		} catch (const std::exception& e) {
+			std::cerr << "Server: failed to handle TEXT message: " << e.what() << std::endl;
+		} catch (...) {
+			std::cerr << "Server: unknown error handling TEXT message" << std::endl;
+		}
+	});
+
 	_updateThread = std::thread(&Server::updateLoop, this);
 	std::cout << "Server started on port " << p_port << "." << std::endl;
 }
@@ -182,9 +215,9 @@ void Server::update() {
 
         if (action) {
             action(clientID, msg);
-			std::cout << "Processed message of type " << msg.getType() << " from client " << clientID << "." << std::endl;
+			// std::cout << "Processed message of type " << msg.getType() << " from client " << clientID << "." << std::endl;
         } else {
-            std::cerr << "No action defined for message type " << msg.getType() << "." << std::endl;
+            // std::cerr << "No action defined for message type " << msg.getType() << "." << std::endl;
         }
     }
 }
@@ -344,8 +377,8 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 
 			// Log raw payload (hex) and basic header info
 			std::string raw_hex = hex_encode(payload.data(), payload.size());
-			std::cout << "Server: received from client " << clientID << " type=" << msgType << " size=" << msgSize << " raw(hex)=";
-			if (raw_hex.size() > 256) std::cout << raw_hex.substr(0,256) << "..." << std::endl; else std::cout << raw_hex << std::endl;
+			// std::cout << "Server: received from client " << clientID << " type=" << msgType << " size=" << msgSize << " raw(hex)=";
+			// if (raw_hex.size() > 256) std::cout << raw_hex.substr(0,256) << "..." << std::endl; else std::cout << raw_hex << std::endl;
 
 			// If session exists and is encrypted, decrypt payload expecting cipher+tag (tag 16 bytes)
 			auto sit = _sessions.find(clientID);
@@ -360,16 +393,16 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 				std::vector<unsigned char> plain;
 				bool decrypted = ftcrypto::aes256gcm_decrypt(sit->second.key, sit->second.recv_counter, payload.data(), cipherlen, payload.data() + cipherlen, taglen, plain);
 				if (!decrypted) {
-					std::cerr << "Failed to decrypt message from client " << clientID << ". Treating payload as plaintext for logging." << std::endl;
-					std::cerr << "Server: cipherlen=" << cipherlen << " taglen=" << taglen << std::endl;
+					// std::cerr << "Failed to decrypt message from client " << clientID << ". Treating payload as plaintext for logging." << std::endl;
+					// std::cerr << "Server: cipherlen=" << cipherlen << " taglen=" << taglen << std::endl;
 					// Fall back: treat the received payload as plaintext (unverified)
 					if (!payload.empty()) {
 						if (is_printable_text(payload.data(), payload.size())) {
 							std::string s((const char*)payload.data(), payload.size());
-							std::cout << "Server (fallback plaintext): '" << s << "'" << std::endl;
+							// std::cout << "Server (fallback plaintext): '" << s << "'" << std::endl;
 						} else {
 							std::string phex = hex_encode(payload.data(), payload.size());
-							std::cout << "Server (fallback plaintext hex): " << (phex.size() > 256 ? phex.substr(0,256)+"..." : phex) << std::endl;
+							// std::cout << "Server (fallback plaintext hex): " << (phex.size() > 256 ? phex.substr(0,256)+"..." : phex) << std::endl;
 						}
 					}
 					msg.appendData(payload.data(), payload.size());
@@ -379,10 +412,12 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 					if (!plain.empty()) {
 						if (is_printable_text(plain.data(), plain.size())) {
 							std::string s((const char*)plain.data(), plain.size());
-							std::cout << "Server: decrypted payload from client " << clientID << ": '" << s << "'" << std::endl;
+							// std::cout << "Server: decrypted payload from client " << clientID << ": '" << s << "'" << std::endl;
 						} else {
 							std::string phex = hex_encode(plain.data(), plain.size());
-							std::cout << "Server: decrypted payload (hex) from client " << clientID << ": " << (phex.size() > 256 ? phex.substr(0,256)+"..." : phex) << std::endl;
+							// std::cout << "Server: decrypted payload (hex) from client " << clientID << ": " << (phex.size() > 256 ? phex.substr(0,256)+"..." : phex) << std::endl;
+							std::string s((const char*)plain.data(), plain.size());
+							// std::cout << "Server: decrypted payload from client " << clientID << ": '" << s << "'" << std::endl;
 						}
 					} else {
 						std::cout << "Server: decrypted payload empty from client " << clientID << std::endl;
@@ -394,10 +429,10 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 				if (!payload.empty()) {
 					if (is_printable_text(payload.data(), payload.size())) {
 						std::string s((const char*)payload.data(), payload.size());
-						std::cout << "Server: plaintext payload from client " << clientID << ": '" << s << "'" << std::endl;
+						// std::cout << "Server: plaintext payload from client " << clientID << ": '" << s << "'" << std::endl;
 					} else {
 						std::string phex = hex_encode(payload.data(), payload.size());
-						std::cout << "Server: plaintext payload (hex) from client " << clientID << ": " << (phex.size() > 256 ? phex.substr(0,256)+"..." : phex) << std::endl;
+						// std::cout << "Server: plaintext payload (hex) from client " << clientID << ": " << (phex.size() > 256 ? phex.substr(0,256)+"..." : phex) << std::endl;
 					}
 				}
 				msg.appendData(payload.data(), payload.size());
