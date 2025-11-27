@@ -102,7 +102,6 @@ bool raw_public_from_private(const std::vector<unsigned char>& priv, std::vector
 
 static void build_nonce(uint64_t counter, unsigned char out[12])
 {
-    // 12-byte nonce: 4 bytes zero + 8-byte big-endian counter
     out[0]=out[1]=out[2]=out[3]=0;
     for (int i=0;i<8;i++) out[11-i] = (unsigned char)((counter >> (8*i)) & 0xff);
 }
@@ -127,7 +126,6 @@ bool aes256gcm_encrypt(const unsigned char key[32], uint64_t counter, const unsi
         if (!plaintext) { fprintf(stderr, "aes256gcm_encrypt: plaintext == NULL but plen=%zu\n", plen); ERR_print_errors_fp(stderr); EVP_CIPHER_CTX_free(ctx); return false; }
         fprintf(stderr, "aes256gcm_encrypt: counter=%llu plen=%zu key0=%02x\n", (unsigned long long)counter, plen, (unsigned char)key[0]);
         if (EVP_EncryptUpdate(ctx, out_cipher.data(), &outlen, plaintext, (int)plen) != 1) { ERR_print_errors_fp(stderr); EVP_CIPHER_CTX_free(ctx); return false; }
-        // resize in case OpenSSL wrote less than plen
         out_cipher.resize(outlen);
     }
     int tmplen = 0;

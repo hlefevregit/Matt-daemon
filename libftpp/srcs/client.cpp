@@ -69,8 +69,7 @@ void Client::connect(const std::string& address, const size_t& port) {
 
 	std::cout << "Client: socket created and connected to " << address << ":" << port << std::endl;
 
-	// Perform lightweight X25519 handshake with server to derive session key
-	// 1) receive server public key (32 bytes)
+	//  receive server public key (32 bytes)
 	std::vector<unsigned char> server_pub(32);
 	size_t received = 0;
 	std::cout << "Client: waiting for server public key (32 bytes)" << std::endl;
@@ -88,7 +87,7 @@ void Client::connect(const std::string& address, const size_t& port) {
 	}
 	std::cout << "Client: received " << received << " bytes of server public key" << std::endl;
 
-	// 2) generate client keypair and send client_pub
+	// generate client keypair and send client_pub
 	std::vector<unsigned char> client_pub, client_priv;
 	if (!ftcrypto::generate_x25519_keypair(client_pub, client_priv)) {
 		std::cerr << "Failed to generate client keypair" << std::endl;
@@ -104,7 +103,6 @@ void Client::connect(const std::string& address, const size_t& port) {
 				std::vector<unsigned char> key;
 				if (ftcrypto::hkdf_sha256(shared, "matt-daemon session", key, 32)) {
 					memcpy(_session_key, key.data(), 32);
-					// Enable automatic encryption now that we re-enabled AES-GCM path.
 					_encrypted = true;
 					_send_counter = 1;
 					_recv_counter = 1;
@@ -151,7 +149,6 @@ void Client::send(const Message& message) {
 	std::lock_guard<std::mutex> lock(_send_mutex);
 	const std::vector<uint8_t>& full = message.rawData();
 
-	// If encryption active and session key present, try to encrypt payload (bytes after header)
 	if (_encrypted && full.size() >= Message::HEADER_SIZE) {
 		// Defensive: ensure session key isn't all-zero (uninitialized)
 		static unsigned char zero32[32] = {0};
@@ -283,7 +280,6 @@ int Client::isUsernameAvailable(const std::string& username) {
 
 	Message request(Message::Type::COMMAND);
 	request << std::string("CHECK_USERNAME") << username;
-	// Send this particular request in plaintext (bypass AES) to avoid handshake/timing issues
 	{
 		std::lock_guard<std::mutex> lock(_send_mutex);
 		const std::vector<uint8_t>& data = request.rawData();
@@ -298,11 +294,8 @@ int Client::isUsernameAvailable(const std::string& username) {
 		}
 	}
 
-	// Wait for response (in a real implementation, this should be asynchronous)
-	// Here we will just simulate waiting and checking the response
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-	// In a real implementation, you would have a proper response handling mechanism
-	// For this stub, we will assume the username is always available
 	return 1; // 1 for available, 0 for taken
 }

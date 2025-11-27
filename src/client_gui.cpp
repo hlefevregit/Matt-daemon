@@ -12,11 +12,8 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 
-// Single Client instance used by the GUI
 static Client gui_client;
 
-// Simple helper to attempt connect using libftpp::Client
-// Returns: 1 = username available and connected, 0 = username taken, -1 = error
 static int attempt_connect(const std::string &host, int port, const std::string &username)
 {
     std::cout << "Attempting connect to " << host << ':' << port << " as '" << username << "'\n";
@@ -31,7 +28,6 @@ static int attempt_connect(const std::string &host, int port, const std::string 
         return -1;
     }
 
-    // Ask server if username is available (this function currently sends a request and returns a stubbed value)
     int avail = gui_client.isUsernameAvailable(username);
     if (avail == 1) {
         std::cout << "Username '" << username << "' is available." << std::endl;

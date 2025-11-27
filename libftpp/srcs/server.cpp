@@ -6,7 +6,7 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/14 11:46:55 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/11/19 15:40:08 by hugo             ###   ########.fr       */
+/*   Updated: 2025/11/21 18:59:03 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -120,7 +120,7 @@ void Server::start(const size_t& p_port) {
 
 void Server::defineAction(const Message::Type& messageType, const std::function<void(long long& clientID, const Message& msg)>& action) {
 	std::lock_guard<std::mutex> lock(_actionsMutex);
-	_actions[messageType] = action;  // ✅ Déjà correct avec Message::Type
+	_actions[messageType] = action;
 }
 
 void Server::sendTo(const Message& message, long long clientID) {
@@ -132,7 +132,6 @@ void Server::sendTo(const Message& message, long long clientID) {
 	}
 	int clientSocket = it->second;
 	const std::vector<uint8_t>& full = message.getData();
-	// If we have a session and it's encrypted, encrypt payload
 	auto sit = _sessions.find(clientID);
 	if (sit != _sessions.end() && sit->second.encrypted && full.size() >= Message::HEADER_SIZE) {
 		uint32_t msgSizeNet;
@@ -151,7 +150,6 @@ void Server::sendTo(const Message& message, long long clientID) {
 	std::vector<unsigned char> out;
 	out.resize(Message::HEADER_SIZE + new_size);
 	std::memcpy(out.data(), full.data(), Message::HEADER_SIZE);
-	// Message header size is stored in host byte order by Message::writeHeader
 	std::memcpy(out.data() + sizeof(int), &new_size, sizeof(uint32_t));
 		std::memcpy(out.data() + Message::HEADER_SIZE, cipher.data(), cipher.size());
 		std::memcpy(out.data() + Message::HEADER_SIZE + cipher.size(), tag.data(), tag.size());
@@ -206,7 +204,6 @@ void Server::update() {
         std::function<void(long long&, const Message&)> action;
         {
             std::lock_guard<std::mutex> lock(_actionsMutex);
-            // ✅ FIX: Utiliser getType() au lieu de type() pour cohérence
             auto it = _actions.find(msg.getType());
             if (it != _actions.end()) {
                 action = it->second;
@@ -365,17 +362,14 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 			uint32_t msgSize;
 			std::memcpy(&msgType, data.data() + offset, sizeof(int));
 			std::memcpy(&msgSize, data.data() + offset + sizeof(int), sizeof(uint32_t));
-			// Message::writeHeader writes size in host byte order, so use it directly
 
 			if (offset + Message::HEADER_SIZE + msgSize > data.size()) {
 				break;
 			}
 			Message msg;
 			msg.setType(msgType);
-			// Extract payload bytes
 			std::vector<unsigned char> payload(data.data() + offset + Message::HEADER_SIZE, data.data() + offset + Message::HEADER_SIZE + msgSize);
 
-			// Log raw payload (hex) and basic header info
 			std::string raw_hex = hex_encode(payload.data(), payload.size());
 			// std::cout << "Server: received from client " << clientID << " type=" << msgType << " size=" << msgSize << " raw(hex)=";
 			// if (raw_hex.size() > 256) std::cout << raw_hex.substr(0,256) << "..." << std::endl; else std::cout << raw_hex << std::endl;
@@ -408,7 +402,6 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 					msg.appendData(payload.data(), payload.size());
 				} else {
 					sit->second.recv_counter++;
-					// Log decrypted plaintext (if printable show as text, otherwise show hex)
 					if (!plain.empty()) {
 						if (is_printable_text(plain.data(), plain.size())) {
 							std::string s((const char*)plain.data(), plain.size());
