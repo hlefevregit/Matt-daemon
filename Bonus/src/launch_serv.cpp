@@ -4,7 +4,7 @@
 
 int main() {
 	Server server;
-	server.start(6668);
+	server.start(4242);
 	while (true) {
 		server.update();
 	}

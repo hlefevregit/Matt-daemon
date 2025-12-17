@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   data_buffer.hpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: hulefevr <hulefevr@student.42.fr>          +#+  +:+       +#+        */
+/*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/09/30 15:49:28 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/09/30 15:54:36 by hulefevr         ###   ########.fr       */
+/*   Updated: 2025/12/17 17:39:59 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,6 +21,12 @@
 class DataBuffer {
 public:
 	DataBuffer();
+
+	// Value-like buffer: allow default copy/move behavior
+	DataBuffer(const DataBuffer&) = default;
+	DataBuffer& operator=(const DataBuffer&) = default;
+	DataBuffer(DataBuffer&&) = default;
+	DataBuffer& operator=(DataBuffer&&) = default;
 	
 	void _clear();
 	void _reset();

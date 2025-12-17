@@ -6,7 +6,7 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/14 11:37:45 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/11/18 17:29:40 by hugo             ###   ########.fr       */
+/*   Updated: 2025/12/17 17:39:57 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,6 +34,12 @@ class Server {
 public:
 	Server();
 	~Server();
+
+	// Coplien form: server manages sockets/threads, disallow copying/moving
+	Server(const Server&) = delete;
+	Server& operator=(const Server&) = delete;
+	Server(Server&&) = delete;
+	Server& operator=(Server&&) = delete;
 
 	void start(const size_t& p_port);
 	void defineAction(const Message::Type& messageType, const std::function<void(long long& clientID, const Message& msg)>& action);

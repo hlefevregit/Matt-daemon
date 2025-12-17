@@ -79,7 +79,7 @@ int main(int, char**)
     static char username[128] = "";
     static char password[128] = "";
     static char host[128] = "127.0.0.1";
-    static int port = 6668;
+    static int port = 4242;
     std::string status_msg;
 
     enum AppState { STATE_LOGIN = 0, STATE_LOBBY = 1 } appState = STATE_LOGIN;

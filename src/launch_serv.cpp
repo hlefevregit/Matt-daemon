@@ -1,12 +1,140 @@
 #include <iostream>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/file.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <signal.h>
+#include <cstring>
+#include <cstdlib>
+#include <string>
+#include <cerrno>
+
 #include "../libftpp/includes/network.hpp"
-#include <csignal>
+#include "../libftpp/includes/tintin_reporter.hpp"
+
+static volatile sig_atomic_t g_quit = 0;
+
+static void handle_signal(int sig) {
+	(void)sig;
+	g_quit = 1;
+}
+
+static void daemonize_process(const std::string &lockfile, const std::string &logfile, int &lockfd_out) {
+	pid_t pid = fork();
+	if (pid < 0) {
+		std::cerr << "fork failed: " << strerror(errno) << std::endl;
+		std::exit(1);
+	}
+	if (pid > 0) {
+		// parent exits
+		std::exit(0);
+	}
+
+	if (setsid() < 0) {
+		std::cerr << "setsid failed: " << strerror(errno) << std::endl;
+		std::exit(1);
+	}
+
+	pid = fork();
+	if (pid < 0) {
+		std::cerr << "second fork failed: " << strerror(errno) << std::endl;
+		std::exit(1);
+	}
+	if (pid > 0) {
+		std::exit(0);
+	}
+
+	umask(0);
+	if (chdir("/") < 0) {
+		std::cerr << "chdir / failed: " << strerror(errno) << std::endl;
+	}
+
+	// close std fds
+	close(STDIN_FILENO);
+	close(STDOUT_FILENO);
+	close(STDERR_FILENO);
+
+	// ensure log dir exists
+	size_t pos = logfile.find_last_of('/');
+	if (pos != std::string::npos) {
+		std::string logdir = logfile.substr(0, pos);
+		mkdir(logdir.c_str(), 0755);
+	}
+
+	// open lockfile
+	int lockfd = open(lockfile.c_str(), O_CREAT | O_RDWR, 0644);
+	if (lockfd < 0) {
+		// cannot log because fds closed; try to write to syslog or just exit
+		_exit(1);
+	}
+	if (flock(lockfd, LOCK_EX | LOCK_NB) < 0) {
+		// already running
+		close(lockfd);
+		_exit(1);
+	}
+
+	// keep lockfd open for lifetime
+	lockfd_out = lockfd;
+
+	// redirect std fds to logfile
+	int logfd = open(logfile.c_str(), O_CREAT | O_WRONLY | O_APPEND, 0644);
+	if (logfd >= 0) {
+		dup2(logfd, STDOUT_FILENO);
+		dup2(logfd, STDERR_FILENO);
+		// keep logfd open; it will be closed on exit
+	}
+}
 
 int main() {
-	Server server;
-	server.start(6668);
-	while (true) {
-		server.update();
+	// Ensure we run as root (needed to write under /var/... and to take the lock)
+	if (geteuid() != 0) {
+		std::cerr << "launch_serv must be run as root (use sudo). Exiting.\n";
+		return 1;
 	}
+
+	// default locations
+	const std::string lockfile = "/var/lock/matt_daemon.lock";
+	const std::string logfile = "/var/log/matt_daemon/matt_daemon.log";
+
+	// install simple signal handlers
+	struct sigaction sa{};
+	sa.sa_handler = handle_signal;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sigaction(SIGINT, &sa, nullptr);
+	sigaction(SIGTERM, &sa, nullptr);
+	sigaction(SIGQUIT, &sa, nullptr);
+	signal(SIGPIPE, SIG_IGN);
+
+	// create needed dirs (best-effort)
+	mkdir("/var/log/matt_daemon", 0755);
+	mkdir("/var/lock", 0755);
+
+	int lockfd = -1;
+	daemonize_process(lockfile, logfile, lockfd);
+
+	// now in daemon context
+	// Initialize Tintin_reporter for structured daemon logging
+	Tintin_reporter::instance().init(logfile);
+	Tintin_reporter::instance().log(std::string("Daemon started. PID: ") + std::to_string(getpid()));
+
+	Server server;
+	server.start(4242);
+
+	while (!g_quit) {
+		server.update();
+		usleep(10000);
+	}
+
+	// cleanup
+	server.stop();
+	if (lockfd >= 0) {
+		flock(lockfd, LOCK_UN);
+		close(lockfd);
+		unlink(lockfile.c_str());
+	}
+
+	Tintin_reporter::instance().log("Daemon exiting");
 	return 0;
 }

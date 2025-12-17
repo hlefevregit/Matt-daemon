@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   thread_safe_iostream.hpp                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: hulefevr <hulefevr@student.42.fr>          +#+  +:+       +#+        */
+/*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/06 12:00:47 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/10/06 12:06:29 by hulefevr         ###   ########.fr       */
+/*   Updated: 2025/12/17 17:39:59 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,6 +20,12 @@
 class ThreadSafeIOStream {
 public:
 	ThreadSafeIOStream();
+
+	// Non-copyable and non-movable: global-like IO stream wrapper
+	ThreadSafeIOStream(const ThreadSafeIOStream&) = delete;
+	ThreadSafeIOStream& operator=(const ThreadSafeIOStream&) = delete;
+	ThreadSafeIOStream(ThreadSafeIOStream&&) = delete;
+	ThreadSafeIOStream& operator=(ThreadSafeIOStream&&) = delete;
 
 	void setPrefix(const std::string& prefix);
 	

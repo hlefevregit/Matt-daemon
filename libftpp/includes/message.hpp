@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   message.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: hulefevr <hulefevr@student.42.fr>          +#+  +:+       +#+        */
+/*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/06 15:54:30 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/10/14 11:56:10 by hulefevr         ###   ########.fr       */
+/*   Updated: 2025/12/17 17:39:59 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -39,6 +39,12 @@ public:
     Message(int type);
     Message(Type type);
     ~Message();
+
+    // Coplien: value-like semantics — explicitly default copy/move
+    Message(const Message&) = default;
+    Message& operator=(const Message&) = default;
+    Message(Message&&) = default;
+    Message& operator=(Message&&) = default;
 
     int type() const;
     Type getType();
