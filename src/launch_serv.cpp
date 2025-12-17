@@ -62,16 +62,20 @@ static void daemonize_process(const std::string &lockfile, const std::string &lo
 		mkdir(logdir.c_str(), 0755);
 	}
 
-	// open lockfile
-	int lockfd = open(lockfile.c_str(), O_CREAT | O_RDWR, 0644);
+	// If a lockfd was already provided (pre-acquired before daemonizing),
+	// reuse it. Otherwise open and lock the file here.
+	int lockfd = lockfd_out;
 	if (lockfd < 0) {
-		// cannot log because fds closed; try to write to syslog or just exit
-		_exit(1);
-	}
-	if (flock(lockfd, LOCK_EX | LOCK_NB) < 0) {
-		// already running
-		close(lockfd);
-		_exit(1);
+		lockfd = open(lockfile.c_str(), O_CREAT | O_RDWR, 0644);
+		if (lockfd < 0) {
+			// cannot log because fds closed; try to write to syslog or just exit
+			_exit(1);
+		}
+		if (flock(lockfd, LOCK_EX | LOCK_NB) < 0) {
+			// already running
+			close(lockfd);
+			_exit(1);
+		}
 	}
 
 	// keep lockfd open for lifetime
@@ -112,6 +116,24 @@ int main() {
 	mkdir("/var/lock", 0755);
 
 	int lockfd = -1;
+
+	// Try to open and lock the lockfile before daemonizing so we can report
+	// errors to the user if another instance is running or if the file cannot
+	// be created/opened. Keep the descriptor open and pass it to the daemon
+	// process so the lock is held for the lifetime of the daemon.
+	int pre_lockfd = open(lockfile.c_str(), O_CREAT | O_RDWR, 0644);
+	if (pre_lockfd < 0) {
+		std::cerr << "Error: failed to create/open lockfile '" << lockfile << "': " << strerror(errno) << std::endl;
+		return 1;
+	}
+	if (flock(pre_lockfd, LOCK_EX | LOCK_NB) < 0) {
+		std::cerr << "Error: another instance may be running (failed to lock '" << lockfile << "'): " << strerror(errno) << std::endl;
+		close(pre_lockfd);
+		return 1;
+	}
+
+	// pass the pre-acquired lockfd into the daemonizer so the child keeps it
+	lockfd = pre_lockfd;
 	daemonize_process(lockfile, logfile, lockfd);
 
 	// now in daemon context
