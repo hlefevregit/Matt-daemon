@@ -6,7 +6,7 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/14 11:46:55 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/12/17 17:34:11 by hugo             ###   ########.fr       */
+/*   Updated: 2025/12/18 11:32:29 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -265,7 +265,13 @@ void Server::stop() {
 
 	_isRunning.store(false);
 	if (_updateThread.joinable()) {
-		_updateThread.join();
+		// avoid joining the update thread from itself (would throw)
+		if (_updateThread.get_id() != std::this_thread::get_id()) {
+			_updateThread.join();
+		} else {
+			// if we're in the update thread, just detach to allow it to finish
+			_updateThread.detach();
+		}
 	}
 
 	{
@@ -445,8 +451,8 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 						// trim CR/LF
 						while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
 						if (s == "quit") {
-							Tintin_reporter::instance().log(std::string("Server: received quit from client ") + std::to_string(clientID) + ", shutting down.");
-							std::exit(0);
+							Tintin_reporter::instance().log(std::string("Server: received quit from client ") + std::to_string(clientID) + ", requesting shutdown.");
+							std::raise(SIGTERM);
 						}
 					}
 				} else {
@@ -468,8 +474,8 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 						std::string s((const char*)plain.data(), plain.size());
 						while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
 						if (s == "quit") {
-							Tintin_reporter::instance().log(std::string("Server: received quit from client ") + std::to_string(clientID) + ", shutting down.");
-							std::exit(0);
+							Tintin_reporter::instance().log(std::string("Server: received quit from client ") + std::to_string(clientID) + ", requesting shutdown.");
+							std::raise(SIGTERM);
 						}
 					}
 				}
@@ -490,8 +496,8 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 					std::string s((const char*)payload.data(), payload.size());
 					while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
 					if (s == "quit") {
-						std::cout << "Server: received quit from client " << clientID << ", shutting down." << std::endl;
-						std::exit(0);
+						Tintin_reporter::instance().log(std::string("Server: received quit from client ") + std::to_string(clientID) + ", requesting shutdown.");
+						std::raise(SIGTERM);
 					}
 				}
 			}
@@ -503,12 +509,11 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 			offset += Message::HEADER_SIZE + msgSize;
 		}
 	} else if (bytesRead == 0) {
-		std::cout << "Client " << clientID << " disconnected." << std::endl;
+		Tintin_reporter::instance().log(std::string("Client ") + std::to_string(clientID) + std::string(" disconnected."));
 		closeClient(clientID);
 		// Explicit shutdown message to make the reason clear in logs
-	std::cout << RED << "[Server] Arrêt déclenché : le client " << clientID << " s'est déconnecté. Le serveur va maintenant s'arrêter." << RESET << std::endl;
-	std::cout << "[Server] Pour garder le serveur en marche après la déconnexion d'un client, activez le mode persistant (option non implémentée)." << std::endl;
-	std::exit(0);
+		Tintin_reporter::instance().log(std::string("[Server] Arrêt déclenché : le client ") + std::to_string(clientID) + std::string(" s'est déconnecté. Demande d'arrêt envoyée."));
+		std::raise(SIGTERM);
 	} else {
 		if (errno != EWOULDBLOCK && errno != EAGAIN) {
 			std::cerr << "Failed to receive data from client " << clientID << "." << std::endl;

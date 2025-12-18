@@ -42,7 +42,7 @@ LIBFTPP_DIR := libftpp
 LIBFTPP_SRCS := $(wildcard $(LIBFTPP_DIR)/srcs/*.cpp)
 LIBFTPP_OBJS := $(patsubst $(LIBFTPP_DIR)/srcs/%.cpp,$(BUILD_DIR)/libftpp/%.o,$(LIBFTPP_SRCS))
 
-TARGET_LAUNCH := $(BUILD_DIR)/Matt_deamon
+TARGET_LAUNCH := $(BUILD_DIR)/MattDaemon
 
 launch_serv: $(TARGET_LAUNCH)
 

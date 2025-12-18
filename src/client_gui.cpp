@@ -121,10 +121,10 @@ int main(int, char**)
         ImGui::SetCursorPosX((card_w - 100.0f) * 0.5f);
         ImGui::Text("SERVER");
         ImGui::SameLine();
-        ImGui::SetCursorPosX(card_w - 40.0f);
-        if (ImGui::Button("X", ImVec2(28, 20))) {
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
-        }
+        // ImGui::SetCursorPosX(card_w - 40.0f);
+        // if (ImGui::Button("X", ImVec2(28, 20))) {
+        //     glfwSetWindowShouldClose(window, GLFW_TRUE);
+        // }
 
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 

@@ -14,9 +14,20 @@
 #include "../libftpp/includes/tintin_reporter.hpp"
 
 static volatile sig_atomic_t g_quit = 0;
+// lockfile info exposed for the signal handler (use only async-signal-safe calls)
+static int g_lockfd = -1;
+static const char* g_lockfile_cstr = "/var/lock/matt_daemon.lock";
 
 static void handle_signal(int sig) {
 	(void)sig;
+	// try to clean up lockfile using async-signal-safe calls
+	if (g_lockfd >= 0) {
+		// close the fd (releases the flock held by this process)
+		close(g_lockfd);
+		g_lockfd = -1;
+		// remove the lockfile entry
+		unlink(g_lockfile_cstr);
+	}
 	g_quit = 1;
 }
 
@@ -134,6 +145,8 @@ int main() {
 
 	// pass the pre-acquired lockfd into the daemonizer so the child keeps it
 	lockfd = pre_lockfd;
+	// expose to signal handler (will be inherited across fork)
+	g_lockfd = pre_lockfd;
 	daemonize_process(lockfile, logfile, lockfd);
 
 	// now in daemon context
@@ -149,13 +162,14 @@ int main() {
 		usleep(10000);
 	}
 
-	// cleanup
-	server.stop();
 	if (lockfd >= 0) {
 		flock(lockfd, LOCK_UN);
 		close(lockfd);
 		unlink(lockfile.c_str());
+		g_lockfd = -1;
 	}
+	// cleanup
+	server.stop();
 
 	Tintin_reporter::instance().log("Daemon exiting");
 	return 0;
