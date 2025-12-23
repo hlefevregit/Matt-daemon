@@ -6,7 +6,7 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/14 11:46:55 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/12/18 11:32:29 by hugo             ###   ########.fr       */
+/*   Updated: 2025/12/18 14:45:01 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -320,9 +320,11 @@ void Server::acceptNewClient() {
 		fcntl(clientSocket, F_SETFL, old_flags & ~O_NONBLOCK); // set blocking
 	}
 
-	const std::string key_path = "server_key.pem";
+	std::cout << "Server: performing handshake with client " << clientID << std::endl;
+	const std::string key_path = "server_key2.pem";
 	std::vector<unsigned char> server_priv, server_pub;
 	if (!ftcrypto::load_private_key_pem(key_path, server_priv)) {
+		std::cout << "Server: no existing private key found at " << key_path << ", generating new keypair" << std::endl;
 		// generate and save
 		if (!ftcrypto::generate_x25519_keypair(server_pub, server_priv)) {
 			std::cerr << "Server: failed to generate static keypair" << std::endl;
@@ -330,12 +332,16 @@ void Server::acceptNewClient() {
 			if (!ftcrypto::save_private_key_pem(key_path, server_priv)) {
 				std::cerr << "Server: failed to save private key to " << key_path << std::endl;
 			}
+			std::cout << "Server: generated and saved new static keypair to " << key_path << std::endl;
 		}
 	} else {
+		std::cout << "Server: loaded existing private key from " << key_path << std::endl;
 		if (!ftcrypto::raw_public_from_private(server_priv, server_pub)) {
 			std::cerr << "Server: failed to compute public key from loaded private key" << std::endl;
 		}
 	}
+
+	std::cout << "Server: sending public key to client " << clientID << std::endl;
 
 	// send server public key (32 bytes)
 	if (server_pub.size() == 32) {

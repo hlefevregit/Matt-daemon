@@ -6,7 +6,7 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/08 11:29:41 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/12/17 17:09:03 by hugo             ###   ########.fr       */
+/*   Updated: 2025/12/23 16:52:19 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -122,9 +122,9 @@ void Client::connect(const std::string& address, const size_t& port) {
 
 
 void Client::disconnect() {
-	if (!_connected) {
-		return;
-	}
+	// if (!_connected) {
+	// 	return;
+	// }
 
 	_stop_recv_thread = true;
 	if (_recv_thread.joinable()) {
