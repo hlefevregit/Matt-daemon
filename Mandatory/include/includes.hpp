@@ -16,6 +16,7 @@
 # include <arpa/inet.h>
 # include <algorithm>
 # include <signal.h>
+# include <csignal>
 # include <fstream>
 # include <mutex>
 # include <ctime>

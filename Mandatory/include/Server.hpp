@@ -19,6 +19,12 @@ class Server
         Tintin_reporter     &_reporter;
         std::vector<int>    _clients;
 
+        int     prepareFdSet(fd_set &readfds);
+        int     waitForActivity(fd_set &readfds, int max_fd);
+        void    handleNewConnection();
+        void    handleClientMessage(fd_set &readfds);
+        bool    processClientMessage(int fd);
+
         Server( const Server& );
         Server& operator=( const Server& );
 };

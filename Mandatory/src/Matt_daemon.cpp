@@ -7,7 +7,7 @@ static const char *LOCK_DIR = "/var/lock";
 static const char *LOG_FILE = "/var/log/matt_daemon/matt_daemon.log";
 static const char *LOCK_FILE = "/var/lock/matt_daemon.lock";
 
-Matt_daemon::Matt_daemon() : _lockFd(-1), _md_reporter(NULL), _server(NULL) {}
+Matt_daemon::Matt_daemon() : _lockFd(-1), _md_reporter(NULL), _server(NULL), _shuttingdown(false) {}
 
 Matt_daemon::~Matt_daemon()
 {
@@ -16,6 +16,36 @@ Matt_daemon::~Matt_daemon()
     if (_md_reporter)
         delete _md_reporter;
     removeLockFile();
+}
+
+bool    Matt_daemon::isShuttingdown( ) const { return _shuttingdown; }
+
+void    Matt_daemon::requestShutdown( const std::string &reason )
+{
+    if (_shuttingdown)
+        return;
+    _shuttingdown = true;
+
+    if (_md_reporter)
+        _md_reporter->info("Shutdown requested: " + reason);
+    
+    if (_server)
+        _server->shutdown();
+
+    removeLockFile();
+
+    Signal_handler::requestQuit();
+}
+
+std::string  Matt_daemon::signalToString(int sig) const
+{
+    switch (sig)
+    {
+        case SIGINT:    return "SIGINT (CTRL+C)";
+        case SIGTERM:   return "SIGTERM (kill -15)";
+        case SIGQUIT:   return "SIGQUIT";
+        default:        return "signal " + std::to_string(sig);
+    }
 }
 
 void    Matt_daemon::checkRoot()
@@ -154,8 +184,15 @@ void    Matt_daemon::run()
         usleep(10000);
     }
 
+    int sig = Signal_handler::lastSignal();
+    if (sig != 0)
+        _md_reporter->info("Received " + signalToString(sig) + ". Shutting down.");
+    else
+        _md_reporter->info("Shuttdown requested (no signal).");
+
     _md_reporter->info("Quitting");
     _server->shutdown();
+    removeLockFile();
 }
 
 void    Matt_daemon::start()
@@ -172,4 +209,7 @@ void    Matt_daemon::start()
 
     setupSignals();
     run();
+
+    _md_reporter->info("Stopped.");
+    removeLockFile();
 }

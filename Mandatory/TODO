@@ -1,3 +1,5 @@
-Check last small bug with closing clients connextions
+Faire que le lock file soit suprime quand on kill le processus
+
+Faire que les signaux qui peuvent etre recus soient log
 
 Daemon on Bonus part

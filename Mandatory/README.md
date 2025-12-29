@@ -48,13 +48,19 @@ it will create the needed directories and files,
 
 it will launch the daemon.
 
+The daemon works with a double fork: one to create the process and the second
+to ensure that the first process will not be able to take control of any
+terminal (so there will not be any risk of receiving unwanted signs for ex).
+This second fork + redirecting the logs to a logfile, instead of showing them on 
+the terminal are the necessary 
+
 https://www.geeksforgeeks.org/linux-unix/setsid-command-in-linux-with-examples/
 
 https://www.ibm.com/docs/en/zvm/7.4.0?topic=descriptions-setsid-create-session-set-process-group-id
 
 TO GET PROCESS PID AND KILL IT (First daemon tests)
 
-sudo pkill -f MattDaemon
+sudo pkill -TERM -x MattDaemon
 
 https://www.tpointtech.com/flock-function-in-cpp
 
@@ -114,3 +120,28 @@ chmod +x status.sh start.sh stop.sh restart.sh
 ### Lock file tests
 
 ls -l /var/lock/matt_daemon.lock
+
+### Kill the process & remove lock file
+
+sudo kill -15 PID
+
+sudo pkill -f MattDaemon
+
+### Kill process with its name
+
+sudo killall -9 process_name
+
+
+Double fork :
+On cherche a avoir un processus qui continue de tourner sans terminal, 
+sans session de login associée et sans interaction directe avec 
+l’utilisateur : c’est cette combinaison (détachement + fermeture/redirection des I/O + indépendance de la session) qui fait qu’on dit qu’il tourne “en arrière‑plan"
+
+https://stackoverflow.com/questions/31485204/why-fork-twice-while-daemonizing
+
+https://0xjet.github.io/3OHA/2022/04/11/post.html
+
+
+
+SIGTERM
+SIGKILL

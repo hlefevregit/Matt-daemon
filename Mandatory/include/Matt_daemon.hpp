@@ -13,12 +13,17 @@ class Matt_daemon
         ~Matt_daemon();
 
         void    start();
+        void    requestShutdown( const std::string &reason );
+        bool    isShuttingdown( ) const;
 
     private:
         int                 _lockFd;
         Tintin_reporter     *_md_reporter;
+        Server              *_server;
         bool                _isDaemonized = false;
-        Server              *_server;    
+        bool                _shuttingdown = false;
+
+        std::string  signalToString(int sig) const;
 
         void    checkRoot();
         void    createDirsAndLogFile();
