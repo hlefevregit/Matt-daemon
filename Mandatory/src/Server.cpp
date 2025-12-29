@@ -154,7 +154,11 @@ bool    Server::processClientMessage(int fd)
     if (bytes <= 0)
     {
         _reporter.userLog("Client disconnected");
-        return false;
+        Matt_daemon* d = Signal_handler::daemon();
+        if (d)
+            d->requestShutdown("client command: CTRL+C");
+        else
+            Signal_handler::requestQuit();
     }
 
     buffer[bytes] = '\0';
