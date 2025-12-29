@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   worker_pool.hpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: hulefevr <hulefevr@student.42.fr>          +#+  +:+       +#+        */
+/*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/06 14:51:42 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/10/06 14:55:43 by hulefevr         ###   ########.fr       */
+/*   Updated: 2025/12/17 17:40:03 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,8 +32,9 @@ public:
 	};
 
 private:
-	WorkerPool(const WorkerPool& other);
-	WorkerPool& operator=(const WorkerPool& other);
+	// non-copyable (owns worker threads)
+	WorkerPool(const WorkerPool& other) = delete;
+	WorkerPool& operator=(const WorkerPool& other) = delete;
 
 	void workerThread();
 

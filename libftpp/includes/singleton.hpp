@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   singleton.hpp                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: hulefevr <hulefevr@student.42.fr>          +#+  +:+       +#+        */
+/*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/09/30 17:16:48 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/09/30 18:17:11 by hulefevr         ###   ########.fr       */
+/*   Updated: 2025/12/17 17:40:09 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,8 +31,8 @@ private:
 	Singleton();
 	~Singleton();
 
-	Singleton(const Singleton&);
-	Singleton& operator=(const Singleton&);
+	Singleton(const Singleton&) = delete;
+	Singleton& operator=(const Singleton&) = delete;
 };
 
 #include "singleton.tpp"

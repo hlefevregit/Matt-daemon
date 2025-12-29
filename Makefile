@@ -18,7 +18,7 @@ CXXFLAGS := -std=c++11 $(PKG_CFLAGS)
 LDFLAGS := $(PKG_LIBS) -lGL -lm -ldl -lpthread -lX11 -lXrandr -lXi -lssl -lcrypto
 
 
-.PHONY: all test launch_serv run-launch run clean
+.PHONY: all test launch_serv run-launch run clean kill-server stop-server
 
 all: test launch_serv
 
@@ -42,7 +42,7 @@ LIBFTPP_DIR := libftpp
 LIBFTPP_SRCS := $(wildcard $(LIBFTPP_DIR)/srcs/*.cpp)
 LIBFTPP_OBJS := $(patsubst $(LIBFTPP_DIR)/srcs/%.cpp,$(BUILD_DIR)/libftpp/%.o,$(LIBFTPP_SRCS))
 
-TARGET_LAUNCH := $(BUILD_DIR)/launch_serv
+TARGET_LAUNCH := $(BUILD_DIR)/MattDaemon
 
 launch_serv: $(TARGET_LAUNCH)
 
@@ -58,6 +58,21 @@ run-launch: $(TARGET_LAUNCH)
 	@echo "Running $(TARGET_LAUNCH)"
 	$(TARGET_LAUNCH)
 
+
+# Stop/kill the server process if running.
+# This tries to find running processes that match the built binary path
+# or the simple name `launch_serv` and sends SIGTERM. It does not use sudo;
+# run `sudo make kill-server` if you started the server as root/system service.
+kill-server:
+	@echo "Stopping launch_serv if running..."
+	-@pids=$$(pgrep -f "$(TARGET_LAUNCH)"); \
+	if [ -n "$$pids" ]; then echo "Killing: $$pids"; echo "$$pids" | xargs -r kill -TERM; sleep 1; fi
+	-@pids=$$(pgrep -f "launch_serv"); \
+	if [ -n "$$pids" ]; then echo "Killing: $$pids"; echo "$$pids" | xargs -r kill -TERM; sleep 1; fi
+	@echo "Done."
+
+stop-server: kill-server
+
 # -----------------------
 # client GUI (ImGui + GLFW)
 # -----------------------
@@ -65,7 +80,7 @@ IMGUICFLAGS := $(shell pkg-config --cflags imgui 2>/dev/null)
 IMGUILIBS := $(shell pkg-config --libs imgui 2>/dev/null)
 
 CLIENT_GUI_SRC := src/client_gui.cpp
-CLIENT_GUI_TARGET := $(BUILD_DIR)/client_gui
+CLIENT_GUI_TARGET := $(BUILD_DIR)/Ben_AFK
 
 
 # ImGui fetch/build settings

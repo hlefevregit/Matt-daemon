@@ -79,7 +79,7 @@ int main(int, char**)
     static char username[128] = "";
     static char password[128] = "";
     static char host[128] = "127.0.0.1";
-    static int port = 6668;
+    static int port = 4242;
     std::string status_msg;
 
     enum AppState { STATE_LOGIN = 0, STATE_LOBBY = 1 } appState = STATE_LOGIN;
@@ -121,10 +121,10 @@ int main(int, char**)
         ImGui::SetCursorPosX((card_w - 100.0f) * 0.5f);
         ImGui::Text("SERVER");
         ImGui::SameLine();
-        ImGui::SetCursorPosX(card_w - 40.0f);
-        if (ImGui::Button("X", ImVec2(28, 20))) {
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
-        }
+        // ImGui::SetCursorPosX(card_w - 40.0f);
+        // if (ImGui::Button("X", ImVec2(28, 20))) {
+        //     glfwSetWindowShouldClose(window, GLFW_TRUE);
+        // }
 
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
@@ -199,8 +199,12 @@ int main(int, char**)
             if (ImGui::Button("Send", ImVec2(80, 24))) {
                 std::string msgText(chatInput);
                 if (!msgText.empty()) {
-                    Message out(Message::Type::TEXT);
-                    out << std::string(username) << msgText;
+                    // don't build/send if not connected
+                    if (gui_client.getSocketFd() == -1) {
+                        std::cerr << "Client is not connected. Cannot send message." << std::endl;
+                    } else {
+                        Message out(Message::Type::TEXT);
+                        out << std::string(username) << msgText;
                     // Debug: print header bytes before sending to inspect endianness/size
                     {
                         const std::vector<uint8_t>& raw = out.rawData();
@@ -209,8 +213,9 @@ int main(int, char**)
                                     raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7]);
                         }
                     }
-                    gui_client.send(out);
-                    lobbyMessages.push_back(std::string(username) + ": " + msgText);
+                        gui_client.send(out);
+                        lobbyMessages.push_back(std::string(username) + ": " + msgText);
+                    }
                     chatInput[0] = '\0';
                     newMessageArrived = true;
                 }
@@ -249,6 +254,12 @@ int main(int, char**)
     }
 
     // Cleanup
+    // ensure client disconnects and recv thread is joined before tearing down GUI
+    try {
+        gui_client.disconnect();
+    } catch (const std::exception& e) {
+        std::cerr << "Exception during client disconnect: " << e.what() << std::endl;
+    }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

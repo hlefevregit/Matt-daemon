@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   thread.hpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: hulefevr <hulefevr@student.42.fr>          +#+  +:+       +#+        */
+/*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/06 13:23:54 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/10/07 18:28:35 by hulefevr         ###   ########.fr       */
+/*   Updated: 2025/12/17 17:39:58 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,6 +24,12 @@ class Thread {
 public:
 	Thread(const std::string& name, std::function<void()> functToExecute);
 	~Thread();
+
+	// Thread wraps std::thread and should not be copyable/movable implicitly
+	Thread(const Thread&) = delete;
+	Thread& operator=(const Thread&) = delete;
+	Thread(Thread&&) = delete;
+	Thread& operator=(Thread&&) = delete;
 
 	void start();
 	void join();

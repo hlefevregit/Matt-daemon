@@ -6,7 +6,7 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/07 20:18:11 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/11/18 17:26:01 by hugo             ###   ########.fr       */
+/*   Updated: 2025/12/17 17:39:56 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,6 +31,12 @@ public:
 	Client() : Client(-1, "127.0.0.1", 0) {}
 	Client(int socket_fd, const std::string& ip_address, uint16_t port);
 	~Client();
+
+	// Coplien form: non-copyable and non-movable (owns socket and thread)
+	Client(const Client&) = delete;
+	Client& operator=(const Client&) = delete;
+	Client(Client&&) = delete;
+	Client& operator=(Client&&) = delete;
 
 	int getSocketFd() const;
 	std::string getIpAddress() const;

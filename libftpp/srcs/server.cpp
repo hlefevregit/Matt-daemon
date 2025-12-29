@@ -6,13 +6,15 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/14 11:46:55 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/11/21 18:59:03 by hugo             ###   ########.fr       */
+/*   Updated: 2025/12/18 14:45:01 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/server.hpp"
 #include "../includes/crypto.hpp"
 #include "../includes/colors.hpp"
+#include "../includes/tintin_reporter.hpp"
+#include <csignal>
 // small helpers for logging
 static std::string hex_encode(const unsigned char* data, size_t len) {
 	std::string s;
@@ -53,6 +55,21 @@ void Server::start(const size_t& p_port) {
 		return;
 	}
 
+	// Allow immediate reuse of the address/port after restart to avoid
+	// EADDRINUSE on quick server relaunches.
+	{
+		int opt = 1;
+		if (setsockopt(_listeningSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+			std::cerr << "Warning: setsockopt(SO_REUSEADDR) failed: " << strerror(errno) << std::endl;
+		}
+#ifdef SO_REUSEPORT
+		if (setsockopt(_listeningSocket, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+			// Not fatal; log for information
+			std::cerr << "Warning: setsockopt(SO_REUSEPORT) failed: " << strerror(errno) << std::endl;
+		}
+#endif
+	}
+
 	sockaddr_in serverAddr;
 	std::memset(&serverAddr, 0, sizeof(serverAddr));
 	serverAddr.sin_family = AF_INET;
@@ -60,7 +77,7 @@ void Server::start(const size_t& p_port) {
 	serverAddr.sin_port = htons(p_port);
 
 	if (bind(_listeningSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-		std::cerr << "Failed to bind socket." << std::endl;
+		std::cerr << "Failed to bind socket: " << strerror(errno) << std::endl;
 		close(_listeningSocket);
 		_listeningSocket = -1;
 		return;
@@ -106,7 +123,7 @@ void Server::start(const size_t& p_port) {
 			if (!recipients.empty()) {
 				sendToArray(out, recipients);
 			}
-			std::cout << GREEN << "[Server] " << RESET << from << ": " << text << std::endl;
+			Tintin_reporter::instance().log(std::string("[Server] ") + from + ": " + text);
 		} catch (const std::exception& e) {
 			std::cerr << "Server: failed to handle TEXT message: " << e.what() << std::endl;
 		} catch (...) {
@@ -115,7 +132,7 @@ void Server::start(const size_t& p_port) {
 	});
 
 	_updateThread = std::thread(&Server::updateLoop, this);
-	std::cout << "Server started on port " << p_port << "." << std::endl;
+	Tintin_reporter::instance().log(std::string("Server started on port ") + std::to_string(p_port) + ".");
 }
 
 void Server::defineAction(const Message::Type& messageType, const std::function<void(long long& clientID, const Message& msg)>& action) {
@@ -210,8 +227,30 @@ void Server::update() {
             }
         }
 
-        if (action) {
-            action(clientID, msg);
+		if (action) {
+			// If this is a TEXT message, parse structured fields (from, text)
+			// and treat a text == "quit" as a shutdown request. update()
+			// runs in the main thread (launcher) so raising SIGTERM lets
+			// the launcher perform cleanup.
+			if (msg.getType() == Message::Type::TEXT) {
+				try {
+					Message m = msg; // copy to avoid mutating readPos
+					std::string from;
+					std::string text;
+					m >> from >> text;
+					// trim CR/LF
+					while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
+					if (text == "quit") {
+							Tintin_reporter::instance().log(std::string("Server: received quit (TEXT) from client ") + std::to_string(clientID) + ", requesting shutdown.");
+							std::raise(SIGTERM);
+					}
+				} catch (const std::exception& e) {
+					std::cerr << "Server: failed to parse TEXT message for quit detection: " << e.what() << std::endl;
+				} catch (...) {
+					// ignore parse errors
+				}
+			}
+			action(clientID, msg);
 			// std::cout << "Processed message of type " << msg.getType() << " from client " << clientID << "." << std::endl;
         } else {
             // std::cerr << "No action defined for message type " << msg.getType() << "." << std::endl;
@@ -226,7 +265,13 @@ void Server::stop() {
 
 	_isRunning.store(false);
 	if (_updateThread.joinable()) {
-		_updateThread.join();
+		// avoid joining the update thread from itself (would throw)
+		if (_updateThread.get_id() != std::this_thread::get_id()) {
+			_updateThread.join();
+		} else {
+			// if we're in the update thread, just detach to allow it to finish
+			_updateThread.detach();
+		}
 	}
 
 	{
@@ -242,7 +287,7 @@ void Server::stop() {
 		_listeningSocket = -1;
 	}
 
-	std::cout << "Server stopped." << std::endl;
+	std::cout << GREEN << "[Server] Arrêt terminé." << RESET << std::endl;
 }
 
 void Server::acceptNewClient() {
@@ -275,9 +320,11 @@ void Server::acceptNewClient() {
 		fcntl(clientSocket, F_SETFL, old_flags & ~O_NONBLOCK); // set blocking
 	}
 
-	const std::string key_path = "server_key.pem";
+	std::cout << "Server: performing handshake with client " << clientID << std::endl;
+	const std::string key_path = "server_key2.pem";
 	std::vector<unsigned char> server_priv, server_pub;
 	if (!ftcrypto::load_private_key_pem(key_path, server_priv)) {
+		std::cout << "Server: no existing private key found at " << key_path << ", generating new keypair" << std::endl;
 		// generate and save
 		if (!ftcrypto::generate_x25519_keypair(server_pub, server_priv)) {
 			std::cerr << "Server: failed to generate static keypair" << std::endl;
@@ -285,12 +332,16 @@ void Server::acceptNewClient() {
 			if (!ftcrypto::save_private_key_pem(key_path, server_priv)) {
 				std::cerr << "Server: failed to save private key to " << key_path << std::endl;
 			}
+			std::cout << "Server: generated and saved new static keypair to " << key_path << std::endl;
 		}
 	} else {
+		std::cout << "Server: loaded existing private key from " << key_path << std::endl;
 		if (!ftcrypto::raw_public_from_private(server_priv, server_pub)) {
 			std::cerr << "Server: failed to compute public key from loaded private key" << std::endl;
 		}
 	}
+
+	std::cout << "Server: sending public key to client " << clientID << std::endl;
 
 	// send server public key (32 bytes)
 	if (server_pub.size() == 32) {
@@ -400,22 +451,39 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 						}
 					}
 					msg.appendData(payload.data(), payload.size());
+					// If the fallback plaintext equals "quit", request shutdown
+					if (is_printable_text(payload.data(), payload.size())) {
+						std::string s((const char*)payload.data(), payload.size());
+						// trim CR/LF
+						while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+						if (s == "quit") {
+							Tintin_reporter::instance().log(std::string("Server: received quit from client ") + std::to_string(clientID) + ", requesting shutdown.");
+							std::raise(SIGTERM);
+						}
+					}
 				} else {
 					sit->second.recv_counter++;
 					if (!plain.empty()) {
 						if (is_printable_text(plain.data(), plain.size())) {
 							std::string s((const char*)plain.data(), plain.size());
-							// std::cout << "Server: decrypted payload from client " << clientID << ": '" << s << "'" << std::endl;
+							// printable decrypted payload (not logged here)
 						} else {
 							std::string phex = hex_encode(plain.data(), plain.size());
-							// std::cout << "Server: decrypted payload (hex) from client " << clientID << ": " << (phex.size() > 256 ? phex.substr(0,256)+"..." : phex) << std::endl;
-							std::string s((const char*)plain.data(), plain.size());
-							// std::cout << "Server: decrypted payload from client " << clientID << ": '" << s << "'" << std::endl;
+							// hex decrypted payload (not logged here)
 						}
 					} else {
-						std::cout << "Server: decrypted payload empty from client " << clientID << std::endl;
+						Tintin_reporter::instance().log(std::string("Server: decrypted payload empty from client ") + std::to_string(clientID));
 					}
 					msg.appendData(plain.data(), plain.size());
+					// If decrypted plaintext equals "quit", request shutdown
+					if (!plain.empty() && is_printable_text(plain.data(), plain.size())) {
+						std::string s((const char*)plain.data(), plain.size());
+						while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+						if (s == "quit") {
+							Tintin_reporter::instance().log(std::string("Server: received quit from client ") + std::to_string(clientID) + ", requesting shutdown.");
+							std::raise(SIGTERM);
+						}
+					}
 				}
 			} else {
 				// plaintext path: log content
@@ -429,6 +497,15 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 					}
 				}
 				msg.appendData(payload.data(), payload.size());
+				// If plaintext equals "quit", request shutdown
+				if (!payload.empty() && is_printable_text(payload.data(), payload.size())) {
+					std::string s((const char*)payload.data(), payload.size());
+					while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+					if (s == "quit") {
+						Tintin_reporter::instance().log(std::string("Server: received quit from client ") + std::to_string(clientID) + ", requesting shutdown.");
+						std::raise(SIGTERM);
+					}
+				}
 			}
 
 			{
@@ -438,8 +515,11 @@ void Server::receiveFromClient(long long clientID, int clientSocket) {
 			offset += Message::HEADER_SIZE + msgSize;
 		}
 	} else if (bytesRead == 0) {
-		std::cout << "Client " << clientID << " disconnected." << std::endl;
+		Tintin_reporter::instance().log(std::string("Client ") + std::to_string(clientID) + std::string(" disconnected."));
 		closeClient(clientID);
+		// Explicit shutdown message to make the reason clear in logs
+		Tintin_reporter::instance().log(std::string("[Server] Arrêt déclenché : le client ") + std::to_string(clientID) + std::string(" s'est déconnecté. Demande d'arrêt envoyée."));
+		std::raise(SIGTERM);
 	} else {
 		if (errno != EWOULDBLOCK && errno != EAGAIN) {
 			std::cerr << "Failed to receive data from client " << clientID << "." << std::endl;

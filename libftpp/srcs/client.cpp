@@ -6,7 +6,7 @@
 /*   By: hugo <hugo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/10/08 11:29:41 by hulefevr          #+#    #+#             */
-/*   Updated: 2025/11/19 15:23:57 by hugo             ###   ########.fr       */
+/*   Updated: 2025/12/23 16:52:19 by hugo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -122,13 +122,20 @@ void Client::connect(const std::string& address, const size_t& port) {
 
 
 void Client::disconnect() {
-	if (!_connected) {
-		return;
-	}
+	// if (!_connected) {
+	// 	return;
+	// }
 
 	_stop_recv_thread = true;
 	if (_recv_thread.joinable()) {
-		_recv_thread.join();
+        // avoid joining from the recv thread itself
+        if (_recv_thread.get_id() != std::this_thread::get_id()) {
+			try {
+				_recv_thread.join();
+			} catch (const std::system_error& e) {
+				std::cerr << "Client::disconnect: join failed: " << e.what() << std::endl;
+			}
+        }
 	}
 
 	close(_socket_fd);
@@ -238,30 +245,55 @@ void Client::update() {
 }
 
 void Client::recvLoop() {
-	while (!_stop_recv_thread) {
-		uint8_t buffer[4096];
-		ssize_t bytes_received = recv(_socket_fd, buffer, sizeof(buffer), 0);
-		if (bytes_received > 0) {
-			std::lock_guard<std::mutex> lock(_recv_mutex);
-			_recv_buffer.insert(_recv_buffer.end(), buffer, buffer + bytes_received);
-		} else if (bytes_received == 0) {
-			std::cerr << "Server closed the connection." << std::endl;
-			disconnect();
-			break;
-		} else {
-			if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
-				std::cerr << "Receive error: " << strerror(errno) << std::endl;
-				disconnect();
+	try {
+		while (!_stop_recv_thread) {
+			uint8_t buffer[4096];
+			ssize_t bytes_received = recv(_socket_fd, buffer, sizeof(buffer), 0);
+			if (bytes_received > 0) {
+				std::lock_guard<std::mutex> lock(_recv_mutex);
+				_recv_buffer.insert(_recv_buffer.end(), buffer, buffer + bytes_received);
+			} else if (bytes_received == 0) {
+				std::cerr << "Server closed the connection." << std::endl;
+				// Do not call disconnect() from inside the recv thread to avoid
+				// joining the current thread. Instead, mark the thread to stop and
+				// close the socket; the thread will then exit cleanly. The main
+				// code (or destructor) should call disconnect() if needed to join.
+				_stop_recv_thread = true;
+				_connected = false;
+				if (_socket_fd != -1) {
+					close(_socket_fd);
+					_socket_fd = -1;
+				}
 				break;
+			} else {
+				if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+					std::cerr << "Receive error: " << strerror(errno) << std::endl;
+					// On error in recv loop, stop and close socket but avoid
+					// calling disconnect() from the same thread.
+					_stop_recv_thread = true;
+					_connected = false;
+					if (_socket_fd != -1) { close(_socket_fd); _socket_fd = -1; }
+					break;
+				}
 			}
 		}
+	} catch (const std::exception& e) {
+		std::cerr << "Client::recvLoop caught exception: " << e.what() << std::endl;
+	} catch (...) {
+		std::cerr << "Client::recvLoop caught unknown exception" << std::endl;
 	}
 }
 
 void Client::handleMessage(const Message& message) {
 	auto it = _actions.find(static_cast<Message::Type>(message.getType()));
 	if (it != _actions.end()) {
-		it->second(message);
+		try {
+			it->second(message);
+		} catch (const std::exception& e) {
+			std::cerr << "Client::handleMessage: action threw exception: " << e.what() << std::endl;
+		} catch (...) {
+			std::cerr << "Client::handleMessage: action threw unknown exception" << std::endl;
+		}
 	} else {
 		std::cerr << "No action defined for message type: " << message.typeToString() << std::endl;
 	}

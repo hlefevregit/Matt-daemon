@@ -27,7 +27,7 @@ class Tintin_reporter
 
         std::string getTimestamp() const;
         std::string typeToString( LogType type ) const;
-
+    
         Tintin_reporter( const Tintin_reporter& );
         Tintin_reporter&    operator=( const Tintin_reporter& );
 };
